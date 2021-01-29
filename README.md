@@ -7,9 +7,6 @@ Currently implemented checks:
 - The validity of the TLS certificate of the Assertion Consumer URL
 - The validity of the SAML signing/encryption certificate(s)
 
-
-
-
 # Usage
 
 ```
@@ -33,4 +30,24 @@ optional arguments:
   --saml-cert-days SAML_CERT_DAYS
                         Minimum number of days the SAML certificate(s) have to
                         be valid
+```
+
+# Examples
+
+```sh
+# Check the TLS certificate of an entity's Assertion Consumer Service URL, using an MDQ
+./nagios-check-saml-entity.py \
+  --mdq https://proxy.eduteams.org \
+  --entity https://proxy.eduteams.org/metadata/backend.xml \
+  --acs-url-tls-cert-days 21
+OK: TLS certificate for 'proxy.eduteams.org' is valid until Jul 15 23:59:59 2022 GMT (expires in 532 days)
+```
+
+```sh
+# Check the expiration of any of the SAML signing/encryption certificates
+./nagios-check-saml-entity.py \
+  --entity https://terena.org/sp \
+  --mdq https://mdx.eduteams.org \
+  --saml-cert-days 12
+CRITICAL: A SAML certificate expired on Mon Jan 11 15:26:38 2021 (19 days ago)
 ```
