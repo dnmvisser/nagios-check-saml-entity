@@ -60,7 +60,7 @@ try:
 
     args = parser.parse_args()
 
-    pprint(args)
+    # pprint(args)
 
     std_args = ['entity', 'mdq', 'location']
     required_args = { key: val for (key, val) in vars(args).items() if key not in std_args }
