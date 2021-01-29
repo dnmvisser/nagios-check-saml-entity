@@ -27,7 +27,7 @@ try:
             description='Check various properties of a SAML entity'
             )
 
-   
+
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument('--location',
             help='The location of the metadata file. Can be a path or a URL. ' +
