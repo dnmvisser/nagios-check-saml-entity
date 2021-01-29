@@ -27,20 +27,21 @@ try:
             description='Check various properties of a SAML entity'
             )
 
-    parser.add_argument('--entity',
-            help='the entityID to check',
-            required=True
-            )
    
-    group1 = parser.add_mutually_exclusive_group()
-    group1.add_argument('--location',
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument('--location',
             help='The location of the metadata file. Can be a path or a URL. ' +
                 'Mutually exclusive with the --mdq option',
             )
     # https://github.com/iay/md-query/blob/master/draft-young-md-query.txt#L362
-    group1.add_argument('--mdq',
-            help='The base URL of the MDQ responder. Mutually exclusive with ' +
+    source.add_argument('--mdq',
+            help='The base URL of an MDQ responder. Mutually exclusive with ' +
                 'the --location option',
+            )
+
+    parser.add_argument('--entity',
+            help='the entityID to check',
+            required=True
             )
 
     parser.add_argument('--tls_cert_days',
@@ -49,7 +50,7 @@ try:
             type=int,
             )
     parser.add_argument('--saml_cert_days',
-            help='Minimum number of days a SAML certificate has to be valid',
+            help='Minimum number of days the SAML certificate(s) have to be valid',
             type=int,
             )
 
