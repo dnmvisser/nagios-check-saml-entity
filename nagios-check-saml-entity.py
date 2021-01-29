@@ -12,6 +12,7 @@ import socket
 from pprint import pprint
 from datetime import datetime
 from cryptography import x509
+from cryptography.hazmat.backends import default_backend
 import base64
 
 # Debug
@@ -127,7 +128,7 @@ try:
             mds.certs(entity_id=args.entity, descriptor='any', use='signing')))
         if len(certs) > 0:
             for i in certs:
-                cert = x509.load_der_x509_certificate(base64.b64decode(i))
+                cert = x509.load_der_x509_certificate(base64.b64decode(i), default_backend())
                 if cert.not_valid_after:
                     expire_in = cert.not_valid_after - datetime.now()
 
