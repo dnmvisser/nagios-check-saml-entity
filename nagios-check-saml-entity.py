@@ -28,12 +28,12 @@ try:
             )
 
 
+    # Where to get the metadata from
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument('--location',
             help='The location of the metadata file. Can be a path or a URL. ' +
                 'Mutually exclusive with the --mdq option',
             )
-    # https://github.com/iay/md-query/blob/master/draft-young-md-query.txt#L362
     source.add_argument('--mdq',
             help='The base URL of an MDQ responder. Mutually exclusive with ' +
                 'the --location option',
@@ -44,44 +44,54 @@ try:
             required=True
             )
 
-    parser.add_argument('--tls_cert_days',
+
+
+    # At least one of these is needed
+    parser.add_argument('--acs-url-tls-cert-days',
             help='Minimum number of days the TLS certificate of the SAML ' +
                 'Assertion Consumer URL has to be valid',
             type=int,
             )
-    parser.add_argument('--saml_cert_days',
+    parser.add_argument('--saml-cert-days',
             help='Minimum number of days the SAML certificate(s) have to be valid',
             type=int,
             )
 
-    
-    
+
     args = parser.parse_args()
-   
+
+    pprint(args)
+
+    std_args = ['entity', 'mdq', 'location']
+    required_args = { key: val for (key, val) in vars(args).items() if key not in std_args }
+    if not any(required_args.values()):
+        dashed = { '--' + k.replace('_', '-') for k in required_args.keys() }
+        pprint(dashed)
+        parser.error('Need at least one of these arguments: ' + ', '.join(dashed))
+
     # start with clean slate
     ok_msg = []
     warn_msg = []
     crit_msg = []
 
-    # pprint(args)
 
     mds = MetadataStore(attrc=None, config=Config())
 
 
-    if args.mdq is not None:
+    if args.mdq:
         url = "{base}/entities/{endpoint}".format(
             base=args.mdq,
             endpoint=MetaDataMDX.sha1_entity_transform(args.entity),
         )
-    if urlparse(args.location).scheme in ['http', 'https']:
-        url=args.location
         mds.load("remote", url=url)
+    elif urlparse(args.location).scheme in ['http', 'https']:
+        mds.load("remote", url=args.location)
     else:
         mds.load("local", args.location)
 
 
     # Expiration check on the TLS certificate of the SAML ACS URL
-    if args.tls_cert_days is not None:
+    if args.acs_url_tls_cert_days:
         acs_res = mds.assertion_consumer_service(entity_id=args.entity)
         acs_url = next(iter(acs_res), {}).get("location")
         hostname = urlparse(acs_url).hostname
@@ -100,7 +110,7 @@ try:
                             crit_msg.append("TLS certificate for '" + hostname +
                                     "' expired on " + cert['notAfter'] +
                                     " (" + str(abs(expire_in.days)) + " days ago)")
-                        elif expire_in.days < args.tls_cert_days:
+                        elif expire_in.days < args.acs_url_tls_cert_days:
                             warn_msg.append("TLS certificate for '" + hostname +
                                     "' is valid until " + cert['notAfter'] +
                                     " (expires in " + str(expire_in.days) + " days)")
@@ -111,7 +121,7 @@ try:
         else:
             warn_msg.append("Non-HTTPS Assertion Consumer Service URL: " + acs_url)
 
-    if args.saml_cert_days is not None:
+    if args.saml_cert_days:
         certs = list(set(
             mds.certs(entity_id=args.entity, descriptor='any', use='encryption') +
             mds.certs(entity_id=args.entity, descriptor='any', use='signing')))
