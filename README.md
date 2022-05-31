@@ -7,6 +7,10 @@ Currently implemented checks:
 - The validity of the TLS certificate of the Assertion Consumer URL
 - The validity of the SAML signing/encryption certificate(s)
 
+# Requirements
+
+* pysaml2 7.1+
+
 # Usage
 
 ```
