@@ -124,8 +124,8 @@ try:
 
     if args.saml_cert_days:
         certs = list(set(
-            mds.certs(entity_id=args.entity, descriptor='any', use='encryption') +
-            mds.certs(entity_id=args.entity, descriptor='any', use='signing')))
+            [mds.certs(entity_id=args.entity, descriptor='any', use='encryption')[0][1]] +
+            [mds.certs(entity_id=args.entity, descriptor='any', use='signing')[0][1]]))
         if len(certs) > 0:
             for i in certs:
                 cert = x509.load_der_x509_certificate(base64.b64decode(i), default_backend())
