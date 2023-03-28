@@ -93,7 +93,11 @@ try:
 
     # Expiration check on the TLS certificate of the SAML ACS URL
     if args.acs_url_tls_cert_days:
-        acs_res = mds.assertion_consumer_service(entity_id=args.entity)
+        # determine if the metadta pertains to an idP or SP
+        if 'idpsso_descriptor' in mds[args.entity]:
+            acs_res = mds.single_sign_on_service(entity_id=args.entity)
+        else:
+            acs_res = mds.assertion_consumer_service(entity_id=args.entity)
         acs_url = next(iter(acs_res), {}).get("location")
         hostname = urlparse(acs_url).hostname
         if urlparse(acs_url).scheme == 'https':
@@ -123,9 +127,14 @@ try:
             warn_msg.append("Non-HTTPS Assertion Consumer Service URL: " + acs_url)
 
     if args.saml_cert_days:
-        certs = list(set(
-            [mds.certs(entity_id=args.entity, descriptor='any', use='encryption')[0][1]] +
-            [mds.certs(entity_id=args.entity, descriptor='any', use='signing')[0][1]]))
+        _encryption_cert = mds.certs(entity_id=args.entity, descriptor='any', use='encryption')
+        _signing_cert = mds.certs(entity_id=args.entity, descriptor='any', use='signing')
+        cert_set = set()
+        if len(_encryption_cert) > 0:
+            cert_set.add(_encryption_cert[0][1])
+        if len(_signing_cert) > 0:
+            cert_set.add(_signing_cert[0][1])
+        certs = list(cert_set)
         if len(certs) > 0:
             for i in certs:
                 cert = x509.load_der_x509_certificate(base64.b64decode(i), default_backend())
