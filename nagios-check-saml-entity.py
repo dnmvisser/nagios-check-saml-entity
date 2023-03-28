@@ -93,7 +93,7 @@ try:
 
     # Expiration check on the TLS certificate of the SAML ACS URL
     if args.acs_url_tls_cert_days:
-        # determine if the metadta pertains to an idP or SP
+        # determine if the metadata pertains to an idP or SP
         if 'idpsso_descriptor' in mds[args.entity]:
             acs_res = mds.single_sign_on_service(entity_id=args.entity)
         else:
