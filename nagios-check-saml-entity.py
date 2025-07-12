@@ -11,6 +11,7 @@ import ssl
 import socket
 from pprint import pprint
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 import base64
@@ -112,17 +113,23 @@ try:
                         expire_in = expire_date - datetime.now()
 
                         if expire_in.days < 0:
-                            crit_msg.append("TLS certificate for '" + hostname +
-                                    "' expired on " + cert['notAfter'] +
-                                    " (" + str(abs(expire_in.days)) + " days ago)")
+                            crit_msg.append("TLS certificate for '{}' expired on {} ({} days ago)".format(
+									hostname,
+									cert['notAfter'],
+                                    abs(expire_in.days))
+							)
                         elif expire_in.days < args.acs_url_tls_cert_days:
-                            warn_msg.append("TLS certificate for '" + hostname +
-                                    "' is valid until " + cert['notAfter'] +
-                                    " (expires in " + str(expire_in.days) + " days)")
+                            warn_msg.append("TLS certificate for '{}' is valid until {} (expires in {} days)".format(
+									hostname,
+									cert['notAfter'],
+									expire_in.days)
+							)
                         else:
-                            ok_msg.append("TLS certificate for '" + hostname +
-                                    "' is valid until " + cert['notAfter'] +
-                                    " (expires in " + str(expire_in.days) + " days)")
+                            ok_msg.append("TLS certificate for '{}' is valid until {} (expires in {} days)".format(
+									hostname,
+									cert['notAfter'],
+									expire_in.days)
+							)
         else:
             warn_msg.append("Non-HTTPS Assertion Consumer Service URL: " + acs_url)
 
@@ -138,21 +145,27 @@ try:
         if len(certs) > 0:
             for i in certs:
                 cert = x509.load_der_x509_certificate(base64.b64decode(i), default_backend())
-                if cert.not_valid_after:
-                    expire_in = cert.not_valid_after - datetime.now()
+                if cert.not_valid_after_utc:
+                    expire_in = cert.not_valid_after_utc - datetime.now(ZoneInfo("UTC"))
 
                     if expire_in.days < 0:
-                        crit_msg.append("A SAML certificate expired on " +
-                                cert.not_valid_after.ctime() +
-                                " (" + str(abs(expire_in.days)) + " days ago)")
+                        crit_msg.append("A SAML certificate expired on {} ({}) ({} days ago)".format(
+                                cert.not_valid_after_utc.ctime(),
+                                cert.not_valid_after_utc.strftime("%Z"),
+                                abs(expire_in.days))
+						)
                     elif expire_in.days < args.saml_cert_days:
-                        warn_msg.append("A SAML certificate is valid until " +
-                                cert.not_valid_after.ctime() +
-                                " (expires in " + str(expire_in.days) + " days)")
+                        warn_msg.append("A SAML certificate is valid until {} ({}) (expires in {} days)".format(
+                                cert.not_valid_after_utc.ctime(),
+                                cert.not_valid_after_utc.strftime("%Z"),
+                                expire_in.days)
+						)
                     else:
-                        ok_msg.append("A SAML certificate is valid until " +
-                                cert.not_valid_after.ctime() +
-                                " (expires in " + str(expire_in.days) + " days)")
+                        ok_msg.append("A SAML certificate is valid until {} ({}) (expires in {} days)".format(
+                                cert.not_valid_after_utc.ctime(),
+                                cert.not_valid_after_utc.strftime("%Z"),
+                                expire_in.days)
+						)
         else:
             ok_msg.append("No SAML certificates found in metatada for entity " + args.entity)
 
