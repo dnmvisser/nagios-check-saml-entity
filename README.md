@@ -11,8 +11,18 @@ Currently implemented checks:
 # Requirements
 
 * python 3.9 or newer
-* [pysaml2](https://pypi.org/project/pysaml2/) 7.1 or newer
+* [`pysaml2`](https://pypi.org/project/pysaml2/) 7.1 or newer
+* [`cryptography`](https://pypi.org/project/cryptography/) v43 or newer
 * `xmlsec1`
+
+# Installation
+
+```console
+sudo apt-get install python3-minimal xmlsec1
+python3 -m venv venv
+. venv/bin/activate
+pip install -r requirements.txt
+```
 
 # Usage
 
