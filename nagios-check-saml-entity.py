@@ -117,7 +117,6 @@ try:
             + f'\nFound entities: {", ".join(mds.keys())}'
             , 2)
 
-    print(f'entity was: {entity}')
     # Expiration check on the TLS certificate of the SAML ACS URL
     if args.acs_url_tls_cert_days:
         # determine if the metadata pertains to an idP or SP
