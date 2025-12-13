@@ -10,7 +10,7 @@ import saml2
 from urllib.parse import urlparse
 import ssl
 import socket
-from pprint import pprint
+# from pprint import pprint
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from cryptography import x509
@@ -42,12 +42,12 @@ try:
     source.add_argument(
         '--mdq',
         help='The base URL of an MDQ responder. Mutually exclusive with '
-        + 'the --location option',
+        + 'the --location option. Requires --entity',
     )
 
     parser.add_argument(
         '--entity',
-        help='the entityID to check. Required with --mdq, or if '
+        help='The entityID to check. Required with --mdq, or if '
         + 'the metadata file contains multiple entities',
     )
 
@@ -79,6 +79,7 @@ try:
 
     mds = MetadataStore(attrc=None, config=Config())
 
+    final_url = location if location is not None else mdq
     try:
         if mdq:
             url = '{base}/entities/{endpoint}'.format(
@@ -86,32 +87,37 @@ try:
                 endpoint=MetaDataMDX.sha1_entity_transform(entity),
             )
             mds.load('remote', url=url)
-            end_url = url
+            final_url = url
         elif urlparse(location).scheme in ['http', 'https']:
             mds.load('remote', url=location)
-            end_url = url
+            final_url = location
         else:
             mds.load('local', location)
-            end_url = location
 
     except saml2.SAMLError as e:
         # Check if the SAMLError has an underlying cause
         if e.__cause__ is not None:
             # Access and print the cause, which holds the detailed parsing error
-            nagios_exit(f'CRITICAL: Failed parsing {location}: {e.__cause__}', 2)
+            nagios_exit(f'CRITICAL: Failed parsing metadata from {final_url}: {e.__cause__}', 2)
         else:
             # If no specific cause is found, use the generic error
-            nagios_exit(f'CRITICAL: Failed parsing {location}: {e}', 2)
+            nagios_exit(f'CRITICAL: Failed parsing from {final_url}: {e}', 2)
     except Exception as e:
         # FIXME in case of HTTP errors, this prints them to stdout?
         # Like "Response status: 404" etc
-        nagios_exit(f'CRITICAL: Failed parsing {location}: {e}', 2)
+        nagios_exit(f'CRITICAL: Failed loading metadata: {e}', 2)
 
     # If no entity argument is given, assume that the document contains only one
     # entity
     if entity is None:
         entity = mds.keys()[0]
+    else:
+        if entity not in mds.keys():
+            nagios_exit(f'CRITICAL: {final_url} did not contain metadata for entity {entity}'
+            + f'\nFound entities: {", ".join(mds.keys())}'
+            , 2)
 
+    print(f'entity was: {entity}')
     # Expiration check on the TLS certificate of the SAML ACS URL
     if args.acs_url_tls_cert_days:
         # determine if the metadata pertains to an idP or SP
@@ -201,7 +207,8 @@ try:
             ok_msg.append(f'No SAML certificates found in metadata for entity {entity}')
 
     else:
-        ok_msg.append(f'Metadata from {end_url} is valid')
+        ok_msg.append('Metadata is valid')
+        ok_msg.append(f'{final_url} contains valid metadata for entity {entity}')
 
 
 except Exception as e:
