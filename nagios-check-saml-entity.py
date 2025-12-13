@@ -47,7 +47,8 @@ try:
 
     parser.add_argument(
         '--entity',
-        help='the entityID to check',
+        help='the entityID to check. Required with --mdq, or if '
+        + 'the metadata file contains multiple entities',
     )
 
     parser.add_argument(
@@ -66,15 +67,10 @@ try:
 
     entity = args.entity
     location = args.location
+    mdq = args.mdq
 
-    # pprint(args)
-
-    # std_args = ['entity', 'mdq', 'location']
-    # required_args = { key: val for (key, val) in vars(args).items() if key not in std_args }
-    # if not any(required_args.values()):
-    #     dashed = { '--' + k.replace('_', '-') for k in required_args.keys() }
-    #     pprint(dashed)
-    #     parser.error('Need at least one of these arguments: ' + ', '.join(dashed))
+    if mdq is not None and entity is None:
+        parser.error('When --mdq is used, you also need to supply --entity')
 
     # start with clean slate
     ok_msg = []
@@ -84,28 +80,34 @@ try:
     mds = MetadataStore(attrc=None, config=Config())
 
     try:
-        if args.mdq:
+        if mdq:
             url = '{base}/entities/{endpoint}'.format(
-                base=args.mdq,
+                base=mdq,
                 endpoint=MetaDataMDX.sha1_entity_transform(entity),
             )
             mds.load('remote', url=url)
+            end_url = url
         elif urlparse(location).scheme in ['http', 'https']:
             mds.load('remote', url=location)
+            end_url = url
         else:
             mds.load('local', location)
+            end_url = location
+
     except saml2.SAMLError as e:
         # Check if the SAMLError has an underlying cause
         if e.__cause__ is not None:
             # Access and print the cause, which holds the detailed parsing error
-            nagios_exit(f'CRITICAL: Failed parsing1 {location}: {e.__cause__}', 2)
+            nagios_exit(f'CRITICAL: Failed parsing {location}: {e.__cause__}', 2)
         else:
             # If no specific cause is found, use the generic error
-            nagios_exit(f'CRITICAL: Failed parsing2 {location}: {e}', 2)
+            nagios_exit(f'CRITICAL: Failed parsing {location}: {e}', 2)
     except Exception as e:
-        nagios_exit(f'CRITICAL: Failed parsing3 {location}: {e}', 2)
+        # FIXME in case of HTTP errors, this prints them to stdout?
+        # Like "Response status: 404" etc
+        nagios_exit(f'CRITICAL: Failed parsing {location}: {e}', 2)
 
-    # If no entity argument is given, assuming the document contains only one
+    # If no entity argument is given, assume that the document contains only one
     # entity
     if entity is None:
         entity = mds.keys()[0]
@@ -133,19 +135,19 @@ try:
 
                         if expire_in.days < 0:
                             crit_msg.append(
-                                "TLS certificate for '{}' expired on {} ({} days ago)".format(
+                                'TLS certificate for https://{} expired on {} ({} days ago)'.format(
                                     hostname, cert['notAfter'], abs(expire_in.days)
                                 )
                             )
                         elif expire_in.days < args.acs_url_tls_cert_days:
                             warn_msg.append(
-                                "TLS certificate for '{}' is valid until {} (expires in {} days)".format(
+                                'TLS certificate for https://{} is valid until {} (expires in {} days)'.format(
                                     hostname, cert['notAfter'], expire_in.days
                                 )
                             )
                         else:
                             ok_msg.append(
-                                "TLS certificate for '{}' is valid until {} (expires in {} days)".format(
+                                'TLS certificate for https://{} is valid until {} (expires in {} days)'.format(
                                     hostname, cert['notAfter'], expire_in.days
                                 )
                             )
@@ -199,7 +201,7 @@ try:
             ok_msg.append(f'No SAML certificates found in metadata for entity {entity}')
 
     else:
-        ok_msg.append(f'Metadata from {location} is valid')
+        ok_msg.append(f'Metadata from {end_url} is valid')
 
 
 except Exception as e:
