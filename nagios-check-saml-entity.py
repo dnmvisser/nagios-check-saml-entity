@@ -5,6 +5,7 @@ import sys
 from saml2.config import Config
 from saml2.mdstore import MetadataStore
 from saml2.mdstore import MetaDataMDX
+import saml2
 
 from urllib.parse import urlparse
 import ssl
@@ -43,12 +44,8 @@ try:
 
     parser.add_argument('--entity',
             help='the entityID to check',
-            required=True
             )
 
-
-
-    # At least one of these is needed
     parser.add_argument('--acs-url-tls-cert-days',
             help='Minimum number of days the TLS certificate of the SAML ' +
                 'Assertion Consumer URL has to be valid',
@@ -62,14 +59,17 @@ try:
 
     args = parser.parse_args()
 
+    entity = args.entity
+    location = args.location
+
     # pprint(args)
 
-    std_args = ['entity', 'mdq', 'location']
-    required_args = { key: val for (key, val) in vars(args).items() if key not in std_args }
-    if not any(required_args.values()):
-        dashed = { '--' + k.replace('_', '-') for k in required_args.keys() }
-        pprint(dashed)
-        parser.error('Need at least one of these arguments: ' + ', '.join(dashed))
+    # std_args = ['entity', 'mdq', 'location']
+    # required_args = { key: val for (key, val) in vars(args).items() if key not in std_args }
+    # if not any(required_args.values()):
+    #     dashed = { '--' + k.replace('_', '-') for k in required_args.keys() }
+    #     pprint(dashed)
+    #     parser.error('Need at least one of these arguments: ' + ', '.join(dashed))
 
     # start with clean slate
     ok_msg = []
@@ -79,26 +79,40 @@ try:
 
     mds = MetadataStore(attrc=None, config=Config())
 
+    try:
+        if args.mdq:
+            url = "{base}/entities/{endpoint}".format(
+                base=args.mdq,
+                endpoint=MetaDataMDX.sha1_entity_transform(entity),
+            )
+            mds.load("remote", url=url)
+        elif urlparse(location).scheme in ['http', 'https']:
+            mds.load("remote", url=location)
+        else:
+            mds.load("local", location)
+    except saml2.SAMLError as e:
+        # Check if the SAMLError has an underlying cause
+        if e.__cause__ is not None:
+            # Access and print the cause, which holds the detailed parsing error
+            nagios_exit(f"CRITICAL: Failed parsing1 {location}: {e.__cause__}", 2)
+        else:
+            # If no specific cause is found, use the generic error
+            nagios_exit(f"CRITICAL: Failed parsing2 {location}: {e}", 2)
+    except Exception as e:
+        nagios_exit(f"CRITICAL: Failed parsing3 {location}: {e}", 2)
 
-    if args.mdq:
-        url = "{base}/entities/{endpoint}".format(
-            base=args.mdq,
-            endpoint=MetaDataMDX.sha1_entity_transform(args.entity),
-        )
-        mds.load("remote", url=url)
-    elif urlparse(args.location).scheme in ['http', 'https']:
-        mds.load("remote", url=args.location)
-    else:
-        mds.load("local", args.location)
-
+    # If no entity argument is given, assuming the document contains only one
+    # entity
+    if entity is None:
+        entity = mds.keys()[0]
 
     # Expiration check on the TLS certificate of the SAML ACS URL
     if args.acs_url_tls_cert_days:
         # determine if the metadata pertains to an idP or SP
-        if 'idpsso_descriptor' in mds[args.entity]:
-            acs_res = mds.single_sign_on_service(entity_id=args.entity)
+        if 'idpsso_descriptor' in mds[entity]:
+            acs_res = mds.single_sign_on_service(entity_id=entity)
         else:
-            acs_res = mds.assertion_consumer_service(entity_id=args.entity)
+            acs_res = mds.assertion_consumer_service(entity_id=entity)
         acs_url = next(iter(acs_res), {}).get("location")
         hostname = urlparse(acs_url).hostname
         if urlparse(acs_url).scheme == 'https':
@@ -134,8 +148,8 @@ try:
             warn_msg.append("Non-HTTPS Assertion Consumer Service URL: " + acs_url)
 
     if args.saml_cert_days:
-        _encryption_cert = mds.certs(entity_id=args.entity, descriptor='any', use='encryption')
-        _signing_cert = mds.certs(entity_id=args.entity, descriptor='any', use='signing')
+        _encryption_cert = mds.certs(entity_id=entity, descriptor='any', use='encryption')
+        _signing_cert = mds.certs(entity_id=entity, descriptor='any', use='signing')
         cert_set = set()
         if len(_encryption_cert) > 0:
             cert_set.add(_encryption_cert[0][1])
@@ -167,7 +181,10 @@ try:
                                 expire_in.days)
 						)
         else:
-            ok_msg.append("No SAML certificates found in metatada for entity " + args.entity)
+            ok_msg.append(f"No SAML certificates found in metadata for entity {entity}")
+
+    else:
+        ok_msg.append(f"Metadata from {location} is valid")
 
 
 except Exception as e:
