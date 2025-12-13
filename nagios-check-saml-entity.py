@@ -21,41 +21,46 @@ import base64
 # import logging
 # logging.basicConfig(level=logging.DEBUG)
 
+
 def nagios_exit(message, code):
     print(message)
     sys.exit(code)
 
+
 try:
     parser = argparse.ArgumentParser(
-            description='Check various properties of a SAML entity'
-            )
-
+        description='Check various properties of a SAML entity'
+    )
 
     # Where to get the metadata from
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument('--location',
-            help='The location of the metadata file. Can be a path or a URL. ' +
-                'Mutually exclusive with the --mdq option',
-            )
-    source.add_argument('--mdq',
-            help='The base URL of an MDQ responder. Mutually exclusive with ' +
-                'the --location option',
-            )
+    source.add_argument(
+        '--location',
+        help='The location of the metadata file. Can be a path or a URL. '
+        + 'Mutually exclusive with the --mdq option',
+    )
+    source.add_argument(
+        '--mdq',
+        help='The base URL of an MDQ responder. Mutually exclusive with '
+        + 'the --location option',
+    )
 
-    parser.add_argument('--entity',
-            help='the entityID to check',
-            )
+    parser.add_argument(
+        '--entity',
+        help='the entityID to check',
+    )
 
-    parser.add_argument('--acs-url-tls-cert-days',
-            help='Minimum number of days the TLS certificate of the SAML ' +
-                'Assertion Consumer URL has to be valid',
-            type=int,
-            )
-    parser.add_argument('--saml-cert-days',
-            help='Minimum number of days the SAML certificate(s) have to be valid',
-            type=int,
-            )
-
+    parser.add_argument(
+        '--acs-url-tls-cert-days',
+        help='Minimum number of days the TLS certificate of the SAML '
+        + 'Assertion Consumer URL has to be valid',
+        type=int,
+    )
+    parser.add_argument(
+        '--saml-cert-days',
+        help='Minimum number of days the SAML certificate(s) have to be valid',
+        type=int,
+    )
 
     args = parser.parse_args()
 
@@ -76,30 +81,29 @@ try:
     warn_msg = []
     crit_msg = []
 
-
     mds = MetadataStore(attrc=None, config=Config())
 
     try:
         if args.mdq:
-            url = "{base}/entities/{endpoint}".format(
+            url = '{base}/entities/{endpoint}'.format(
                 base=args.mdq,
                 endpoint=MetaDataMDX.sha1_entity_transform(entity),
             )
-            mds.load("remote", url=url)
+            mds.load('remote', url=url)
         elif urlparse(location).scheme in ['http', 'https']:
-            mds.load("remote", url=location)
+            mds.load('remote', url=location)
         else:
-            mds.load("local", location)
+            mds.load('local', location)
     except saml2.SAMLError as e:
         # Check if the SAMLError has an underlying cause
         if e.__cause__ is not None:
             # Access and print the cause, which holds the detailed parsing error
-            nagios_exit(f"CRITICAL: Failed parsing1 {location}: {e.__cause__}", 2)
+            nagios_exit(f'CRITICAL: Failed parsing1 {location}: {e.__cause__}', 2)
         else:
             # If no specific cause is found, use the generic error
-            nagios_exit(f"CRITICAL: Failed parsing2 {location}: {e}", 2)
+            nagios_exit(f'CRITICAL: Failed parsing2 {location}: {e}', 2)
     except Exception as e:
-        nagios_exit(f"CRITICAL: Failed parsing3 {location}: {e}", 2)
+        nagios_exit(f'CRITICAL: Failed parsing3 {location}: {e}', 2)
 
     # If no entity argument is given, assuming the document contains only one
     # entity
@@ -113,42 +117,45 @@ try:
             acs_res = mds.single_sign_on_service(entity_id=entity)
         else:
             acs_res = mds.assertion_consumer_service(entity_id=entity)
-        acs_url = next(iter(acs_res), {}).get("location")
+        acs_url = next(iter(acs_res), {}).get('location')
         hostname = urlparse(acs_url).hostname
         if urlparse(acs_url).scheme == 'https':
             context = ssl.create_default_context()
             with socket.create_connection((hostname, 443)) as sock:
-                with context.wrap_socket(sock, server_hostname = hostname) as tls_sock:
+                with context.wrap_socket(sock, server_hostname=hostname) as tls_sock:
                     cert = tls_sock.getpeercert()
                     # pprint(cert)
                     if 'notAfter' in cert:
-                        expire_date = datetime.strptime(cert['notAfter'],
-                                "%b %d %H:%M:%S %Y %Z")
+                        expire_date = datetime.strptime(
+                            cert['notAfter'], '%b %d %H:%M:%S %Y %Z'
+                        )
                         expire_in = expire_date - datetime.now()
 
                         if expire_in.days < 0:
-                            crit_msg.append("TLS certificate for '{}' expired on {} ({} days ago)".format(
-									hostname,
-									cert['notAfter'],
-                                    abs(expire_in.days))
-							)
+                            crit_msg.append(
+                                "TLS certificate for '{}' expired on {} ({} days ago)".format(
+                                    hostname, cert['notAfter'], abs(expire_in.days)
+                                )
+                            )
                         elif expire_in.days < args.acs_url_tls_cert_days:
-                            warn_msg.append("TLS certificate for '{}' is valid until {} (expires in {} days)".format(
-									hostname,
-									cert['notAfter'],
-									expire_in.days)
-							)
+                            warn_msg.append(
+                                "TLS certificate for '{}' is valid until {} (expires in {} days)".format(
+                                    hostname, cert['notAfter'], expire_in.days
+                                )
+                            )
                         else:
-                            ok_msg.append("TLS certificate for '{}' is valid until {} (expires in {} days)".format(
-									hostname,
-									cert['notAfter'],
-									expire_in.days)
-							)
+                            ok_msg.append(
+                                "TLS certificate for '{}' is valid until {} (expires in {} days)".format(
+                                    hostname, cert['notAfter'], expire_in.days
+                                )
+                            )
         else:
-            warn_msg.append("Non-HTTPS Assertion Consumer Service URL: " + acs_url)
+            warn_msg.append('Non-HTTPS Assertion Consumer Service URL: ' + acs_url)
 
     if args.saml_cert_days:
-        _encryption_cert = mds.certs(entity_id=entity, descriptor='any', use='encryption')
+        _encryption_cert = mds.certs(
+            entity_id=entity, descriptor='any', use='encryption'
+        )
         _signing_cert = mds.certs(entity_id=entity, descriptor='any', use='signing')
         cert_set = set()
         if len(_encryption_cert) > 0:
@@ -158,43 +165,51 @@ try:
         certs = list(cert_set)
         if len(certs) > 0:
             for i in certs:
-                cert = x509.load_der_x509_certificate(base64.b64decode(i), default_backend())
+                cert = x509.load_der_x509_certificate(
+                    base64.b64decode(i), default_backend()
+                )
                 if cert.not_valid_after_utc:
-                    expire_in = cert.not_valid_after_utc - datetime.now(ZoneInfo("UTC"))
+                    expire_in = cert.not_valid_after_utc - datetime.now(ZoneInfo('UTC'))
 
                     if expire_in.days < 0:
-                        crit_msg.append("A SAML certificate expired on {} ({}) ({} days ago)".format(
+                        crit_msg.append(
+                            'A SAML certificate expired on {} ({}) ({} days ago)'.format(
                                 cert.not_valid_after_utc.ctime(),
-                                cert.not_valid_after_utc.strftime("%Z"),
-                                abs(expire_in.days))
-						)
+                                cert.not_valid_after_utc.strftime('%Z'),
+                                abs(expire_in.days),
+                            )
+                        )
                     elif expire_in.days < args.saml_cert_days:
-                        warn_msg.append("A SAML certificate is valid until {} ({}) (expires in {} days)".format(
+                        warn_msg.append(
+                            'A SAML certificate is valid until {} ({}) (expires in {} days)'.format(
                                 cert.not_valid_after_utc.ctime(),
-                                cert.not_valid_after_utc.strftime("%Z"),
-                                expire_in.days)
-						)
+                                cert.not_valid_after_utc.strftime('%Z'),
+                                expire_in.days,
+                            )
+                        )
                     else:
-                        ok_msg.append("A SAML certificate is valid until {} ({}) (expires in {} days)".format(
+                        ok_msg.append(
+                            'A SAML certificate is valid until {} ({}) (expires in {} days)'.format(
                                 cert.not_valid_after_utc.ctime(),
-                                cert.not_valid_after_utc.strftime("%Z"),
-                                expire_in.days)
-						)
+                                cert.not_valid_after_utc.strftime('%Z'),
+                                expire_in.days,
+                            )
+                        )
         else:
-            ok_msg.append(f"No SAML certificates found in metadata for entity {entity}")
+            ok_msg.append(f'No SAML certificates found in metadata for entity {entity}')
 
     else:
-        ok_msg.append(f"Metadata from {location} is valid")
+        ok_msg.append(f'Metadata from {location} is valid')
 
 
 except Exception as e:
     # pprint(e)
-    nagios_exit("UNKNOWN: {0}.".format(e), 3)
+    nagios_exit('UNKNOWN: {0}.'.format(e), 3)
 
 # Exit with accumulated message(s)
 if crit_msg:
-    nagios_exit("CRITICAL: " + ' '.join(crit_msg + warn_msg), 2)
+    nagios_exit('CRITICAL: ' + ' '.join(crit_msg + warn_msg), 2)
 elif warn_msg:
-    nagios_exit("WARNING: " + ' '.join(warn_msg), 1)
+    nagios_exit('WARNING: ' + ' '.join(warn_msg), 1)
 else:
-    nagios_exit("OK: " + '\n'.join(ok_msg), 0)
+    nagios_exit('OK: ' + '\n'.join(ok_msg), 0)
